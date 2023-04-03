@@ -23,6 +23,7 @@ resource "aws_vpc" "openshift_vpc" {
 resource "aws_subnet" "openshift_subnet" {
   vpc_id = aws_vpc.openshift_vpc.id
   cidr_block = var.subnet_cidr
+  depends_on = [ aws_vpc.openshift_vpc ]
   tags = {
     Name = var.stack_name
   }
@@ -32,6 +33,7 @@ resource "aws_security_group" "login_sg" {
   name = "Login security group"
   description = "Allow login from my IP"
   vpc_id = aws_vpc.openshift_vpc.id
+  depends_on = [ aws_vpc.openshift_vpc ]
 
   ingress {
     description = "Allow ssh from my IP"
@@ -58,6 +60,7 @@ resource "aws_security_group" "cluster_internal_sg" {
   name = "Cluster internal security group"
   description = "Allow all traffic between nodes"
   vpc_id = aws_vpc.openshift_vpc.id
+  depends_on = [ aws_vpc.openshift_vpc ]
 
   ingress {
     from_port = 0
@@ -81,6 +84,7 @@ resource "aws_security_group" "cluster_internal_sg" {
 
 resource "aws_internet_gateway" "cluster_igw" {
   vpc_id = aws_vpc.openshift_vpc.id
+  depends_on = [ aws_vpc.openshift_vpc ]
 
   tags = {
     Name = "OpenShift Cluster IGW"
@@ -89,6 +93,7 @@ resource "aws_internet_gateway" "cluster_igw" {
 
 resource "aws_route_table" "cluster_route_table" {
   vpc_id = aws_vpc.openshift_vpc.id
+  depends_on = [ aws_vpc.openshift_vpc ]
 
   tags = {
     Name = "OpenShift Cluster Route Table"
@@ -97,6 +102,7 @@ resource "aws_route_table" "cluster_route_table" {
 
 resource "aws_route" "cluster_route_to_internet" {
   route_table_id = aws_route_table.cluster_route_table.id
+  depends_on = [ aws_route_table.cluster_route_table ]
 
   destination_cidr_block = "0.0.0.0/0"
   gateway_id = aws_internet_gateway.cluster_igw.id
