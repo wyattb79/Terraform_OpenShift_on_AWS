@@ -1,7 +1,7 @@
 terraform {
   required_providers {
     aws = {
-      source = "hashicorp/aws"
+      source  = "hashicorp/aws"
       version = "~> 4.16"
     }
   }
@@ -14,41 +14,40 @@ provider "aws" {
 
 resource "aws_vpc" "openshift_vpc" {
   cidr_block = var.vpc_cidr
-  
+
   tags = {
     Name = var.stack_name
   }
 }
 
 resource "aws_subnet" "openshift_subnet" {
-  vpc_id = aws_vpc.openshift_vpc.id
-  cidr_block = var.subnet_cidr
-  depends_on = [ aws_vpc.openshift_vpc ]
+  vpc_id                  = aws_vpc.openshift_vpc.id
+  cidr_block              = var.subnet_cidr
+  map_public_ip_on_launch = "true"
   tags = {
     Name = var.stack_name
   }
 }
 
-resource "aws_security_group" "login_sg" {
-  name = "Login security group"
+resource "aws_security_group" "control_plane_sg" {
+  name        = "Login security group"
   description = "Allow login from my IP"
-  vpc_id = aws_vpc.openshift_vpc.id
-  depends_on = [ aws_vpc.openshift_vpc ]
+  vpc_id      = aws_vpc.openshift_vpc.id
 
   ingress {
     description = "Allow ssh from my IP"
-    from_port = 22
-    to_port = 22
-    protocol = "tcp"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
     cidr_blocks = [var.login_ip]
   }
 
   // terraform removes the default rule
   egress {
-    from_port = 0
-    to_port = 0
-    protocol = "-1"
-    cidr_blocks = ["0.0.0.0/0"] 
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   tags = {
@@ -57,24 +56,23 @@ resource "aws_security_group" "login_sg" {
 }
 
 resource "aws_security_group" "cluster_internal_sg" {
-  name = "Cluster internal security group"
+  name        = "Cluster internal security group"
   description = "Allow all traffic between nodes"
-  vpc_id = aws_vpc.openshift_vpc.id
-  depends_on = [ aws_vpc.openshift_vpc ]
+  vpc_id      = aws_vpc.openshift_vpc.id
 
   ingress {
     from_port = 0
-    to_port = 0
-    protocol = "-1"
-    self = true
+    to_port   = 0
+    protocol  = "-1"
+    self      = true
   }
 
   // terraform removes the default rule
   egress {
-    from_port = 0
-    to_port = 0
-    protocol = "-1"
-    cidr_blocks = ["0.0.0.0/0"] 
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   tags = {
@@ -84,7 +82,6 @@ resource "aws_security_group" "cluster_internal_sg" {
 
 resource "aws_internet_gateway" "cluster_igw" {
   vpc_id = aws_vpc.openshift_vpc.id
-  depends_on = [ aws_vpc.openshift_vpc ]
 
   tags = {
     Name = "OpenShift Cluster IGW"
@@ -93,7 +90,6 @@ resource "aws_internet_gateway" "cluster_igw" {
 
 resource "aws_route_table" "cluster_route_table" {
   vpc_id = aws_vpc.openshift_vpc.id
-  depends_on = [ aws_vpc.openshift_vpc ]
 
   tags = {
     Name = "OpenShift Cluster Route Table"
@@ -102,8 +98,42 @@ resource "aws_route_table" "cluster_route_table" {
 
 resource "aws_route" "cluster_route_to_internet" {
   route_table_id = aws_route_table.cluster_route_table.id
-  depends_on = [ aws_route_table.cluster_route_table ]
 
   destination_cidr_block = "0.0.0.0/0"
-  gateway_id = aws_internet_gateway.cluster_igw.id
+  gateway_id             = aws_internet_gateway.cluster_igw.id
+}
+
+resource "aws_route_table_association" "route_as" {
+  subnet_id      = aws_subnet.openshift_subnet.id
+  route_table_id = aws_route_table.cluster_route_table.id
+}
+
+data "aws_ami" "rhel8" {
+  most_recent = true
+
+  filter {
+    name   = "name"
+    values = ["RHEL-8*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+
+  // Red Hat
+  owners = ["309956199498"]
+}
+
+resource "aws_instance" "control_plane" {
+  ami             = data.aws_ami.rhel8.id
+  instance_type   = var.control_plane_type
+  count           = var.control_plane_nodes
+  key_name        = var.key_name
+  security_groups = [aws_security_group.control_plane_sg.id]
+  subnet_id       = aws_subnet.openshift_subnet.id
+
+  tags = {
+    Name = "control_plane-${count.index}"
+  }
 }
