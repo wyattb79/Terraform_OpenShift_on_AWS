@@ -20,7 +20,7 @@ variable "aws_region" {
 
 variable "login_ip" {
   type = string
-  default = "108.56.242.90/32"
+  default = "1.2.3.4/32"
 }
 
 variable "control_plane_type" {
