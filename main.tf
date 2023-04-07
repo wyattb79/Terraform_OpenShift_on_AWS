@@ -111,9 +111,14 @@ resource "aws_route" "cluster_route_to_internet" {
   gateway_id             = aws_internet_gateway.cluster_igw.id
 }
 
+resource "aws_eip" "nat_eip" {
+  vpc = true
+}
+
 resource "aws_nat_gateway" "nat_gw" {
-  subnet_id         = aws_subnet.private_subnet.id
-  connectivity_type = "private"
+  subnet_id         = aws_subnet.controlplane_subnet.id
+  connectivity_type = "public"
+  allocation_id     = aws_eip.nat_eip.id
 
   tags = {
     Name = "OpenShift NAT gw"
